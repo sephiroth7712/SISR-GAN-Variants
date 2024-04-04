@@ -90,7 +90,7 @@ if __name__ == "__main__":
                 if torch.cuda.is_available():
                     image = image.cuda()
 
-                out = model(image).clamp(0.0, 1.0)
+                out = model(image)
                 out = out.cpu()
                 out_img = out.data[0].numpy()
                 out_img *= 255.0

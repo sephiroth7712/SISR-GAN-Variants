@@ -41,5 +41,5 @@ class ESPCN(Module):
     def forward(self, x):
         x = self.p1(x)
         x = self.p2(x)
-        # x = torch.clamp_(x, 0.0, 1.0)
+        x = torch.clamp_(x, 0.0, 1.0)
         return x
