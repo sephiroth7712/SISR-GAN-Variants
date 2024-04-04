@@ -1,6 +1,5 @@
 import argparse
 import os
-import random
 import pandas as pd
 import torch.optim as optim
 import torch.utils.data

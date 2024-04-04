@@ -1,4 +1,5 @@
 from torch.nn import Module, Sequential, Conv2d, LeakyReLU, PixelShuffle, init
+import torch
 import math
 
 
@@ -40,4 +41,5 @@ class ESPCN(Module):
     def forward(self, x):
         x = self.p1(x)
         x = self.p2(x)
+        x = torch.clamp_(x, 0.0, 1.0)
         return x
