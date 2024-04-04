@@ -13,10 +13,11 @@ class GeneratorLoss(nn.Module):
         self.loss_network = loss_network
         self.mse_loss = nn.MSELoss()
         self.tv_loss = TVLoss()
+        self.adversarial_loss = nn.BCELoss()
 
     def forward(self, out_labels, out_images, target_images):
         # Adversarial Loss
-        adversarial_loss = torch.nn.functional.binary_cross_entropy(
+        adversarial_loss = self.adversarial_loss(
             out_labels, torch.ones_like(out_labels)
         )
         # Perception Loss
