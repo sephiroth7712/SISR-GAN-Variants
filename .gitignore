@@ -1,0 +1,11 @@
+epochs
+__pycache__
+data
+pre_training_results
+statistics
+test_images
+venv
+test_videos
+outputs
+training_results
+*.log
