@@ -13,7 +13,7 @@ from data import TrainDatasetFromFolder, ValDatasetFromFolder, display_transform
 from loss import GeneratorLoss, PixelLoss
 from models.common import ssim, psnr
 from models.discriminator import Discriminator
-from models.ESPCN import ESPCN
+from models import get_generator
 
 parser = argparse.ArgumentParser(description="Train Super Resolution Models")
 parser.add_argument(
@@ -57,7 +57,7 @@ if __name__ == "__main__":
     )
     val_loader = DataLoader(dataset=val_set, num_workers=4, batch_size=1, shuffle=False)
 
-    netG = ESPCN(N_GPU, UPSCALE_FACTOR)
+    netG = get_generator(MODEL_NAME)(N_GPU, UPSCALE_FACTOR)
     optimizerG = optim.Adam(netG.parameters())
     print("# generator parameters:", sum(param.numel() for param in netG.parameters()))
 
@@ -170,7 +170,7 @@ if __name__ == "__main__":
             )
 
     # Reloading the Generator with latest weights after warmup
-    netG = ESPCN(N_GPU, UPSCALE_FACTOR)
+    netG = get_generator(MODEL_NAME)(N_GPU, UPSCALE_FACTOR)
     optimizerG = optim.Adam(netG.parameters())
     if torch.cuda.is_available():
         netG.cuda()
@@ -183,15 +183,27 @@ if __name__ == "__main__":
         )
     )
 
-    # netG.load_state_dict(
-    #     torch.load(
-    #         "epochs/" + MODEL_NAME + "/pre_netG_epoch_%d_0.pth" % (UPSCALE_FACTOR)
-    #     )
-    # )
+    netG.load_state_dict(
+        torch.load(
+            "epochs/" + MODEL_NAME + "/pre_netG_epoch_%d_0.pth" % (UPSCALE_FACTOR)
+        )
+    )
+
+    netG.load_state_dict(
+        torch.load(
+            "epochs/" + MODEL_NAME + "/netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
+        )
+    )
 
     netD = Discriminator(N_GPU)
     print(
         "# discriminator parameters:", sum(param.numel() for param in netD.parameters())
+    )
+
+    netD.load_state_dict(
+        torch.load(
+            "epochs/" + MODEL_NAME + "/netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
+        )
     )
 
     generator_criterion = GeneratorLoss()
@@ -246,7 +258,7 @@ if __name__ == "__main__":
             fake_out = netD(fake_img)
 
             d_loss_real = discriminator_criterion(real_out, torch.ones_like(real_out))
-            d_loss_fake = discriminator_criterion(fake_out, torch.ones_like(fake_out))
+            d_loss_fake = discriminator_criterion(fake_out, torch.zeros_like(fake_out))
             d_loss = d_loss_real + d_loss_fake
             d_loss.backward(retain_graph=True)
             optimizerD.step()
@@ -285,7 +297,7 @@ if __name__ == "__main__":
                 )
             )
 
-        if epoch % 200 == 0:
+        if epoch % 1000 == 0:
             netG.eval()
             out_path = (
                 "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
