@@ -10,7 +10,7 @@ from torch.nn import (
 )
 import torch
 import math
-from common import ResidualBlock
+from models.common import ResidualBlock
 
 
 class SRGAN(Module):
