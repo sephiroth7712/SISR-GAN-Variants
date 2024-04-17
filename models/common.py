@@ -1,5 +1,6 @@
 import numpy as np
 import torch
+from torch.nn import functional
 from torchmetrics.functional.image import (
     peak_signal_noise_ratio,
     structural_similarity_index_measure,
@@ -78,5 +79,10 @@ def ssim(x1, x2):
     return structural_similarity_index_measure(x1, x2)
 
 
+# ---------------------------------------
+#  Utility
+# ---------------------------------------
+
+
 def pixel_shuffle(scale):
-    return lambda x: torch.nn.functional.pixel_shuffle(x, scale)
+    return lambda x: functional.pixel_shuffle(x, scale)

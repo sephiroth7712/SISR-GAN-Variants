@@ -108,7 +108,7 @@ if __name__ == "__main__":
         if not os.path.exists(out_path):
             os.makedirs(out_path)
 
-        if epoch % 500 == 0:
+        if epoch % 20 == 0:
             with torch.no_grad():
                 val_bar = tqdm(val_loader)
                 valing_results = {
@@ -183,28 +183,28 @@ if __name__ == "__main__":
         )
     )
 
-    netG.load_state_dict(
-        torch.load(
-            "epochs/" + MODEL_NAME + "/pre_netG_epoch_%d_0.pth" % (UPSCALE_FACTOR)
-        )
-    )
+    # netG.load_state_dict(
+    #     torch.load(
+    #         "epochs/" + MODEL_NAME + "/pre_netG_epoch_%d_0.pth" % (UPSCALE_FACTOR)
+    #     )
+    # )
 
-    netG.load_state_dict(
-        torch.load(
-            "epochs/" + MODEL_NAME + "/netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
-        )
-    )
+    # netG.load_state_dict(
+    #     torch.load(
+    #         "epochs/" + MODEL_NAME + "/netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
+    #     )
+    # )
 
     netD = Discriminator(N_GPU)
     print(
         "# discriminator parameters:", sum(param.numel() for param in netD.parameters())
     )
 
-    netD.load_state_dict(
-        torch.load(
-            "epochs/" + MODEL_NAME + "/netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
-        )
-    )
+    # netD.load_state_dict(
+    #     torch.load(
+    #         "epochs/" + MODEL_NAME + "/netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
+    #     )
+    # )
 
     generator_criterion = GeneratorLoss()
     discriminator_criterion = torch.nn.BCELoss()
@@ -297,7 +297,7 @@ if __name__ == "__main__":
                 )
             )
 
-        if epoch % 1000 == 0:
+        if epoch % 100 == 0:
             netG.eval()
             out_path = (
                 "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
