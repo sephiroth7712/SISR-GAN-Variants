@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.nn import functional
+from torch.nn import functional, Module, Conv2d, PReLU, PixelShuffle, BatchNorm2d
 from torchmetrics.functional.image import (
     peak_signal_noise_ratio,
     structural_similarity_index_measure,
@@ -86,3 +86,47 @@ def ssim(x1, x2):
 
 def pixel_shuffle(scale):
     return lambda x: functional.pixel_shuffle(x, scale)
+
+
+class ResidualBlock(Module):
+    def __init__(self, channels, kernel_size=3, padding=1, batch_norm=True):
+        super(ResidualBlock, self).__init__()
+        self.batch_norm = batch_norm
+        self.conv1 = Conv2d(
+            channels, channels, kernel_size=kernel_size, padding=padding
+        )
+        if batch_norm:
+            self.bn1 = BatchNorm2d(channels)
+        self.prelu = PReLU()
+        self.conv2 = Conv2d(
+            channels, channels, kernel_size=kernel_size, padding=padding
+        )
+        if batch_norm:
+            self.bn2 = BatchNorm2d(channels)
+
+    def forward(self, x):
+        residual = self.conv1(x)
+        if self.batch_norm:
+            residual = self.bn1(residual)
+        residual = self.prelu(residual)
+        residual = self.conv2(residual)
+        if self.batch_norm:
+            residual = self.bn2(residual)
+
+        return x + residual
+
+
+class UpsampleBLock(Module):
+    def __init__(self, in_channels, up_scale):
+        super(UpsampleBLock, self).__init__()
+        self.conv = Conv2d(
+            in_channels, in_channels * up_scale**2, kernel_size=3, padding=1
+        )
+        self.pixel_shuffle = PixelShuffle(up_scale)
+        self.prelu = PReLU()
+
+    def forward(self, x):
+        x = self.conv(x)
+        x = self.pixel_shuffle(x)
+        x = self.prelu(x)
+        return x

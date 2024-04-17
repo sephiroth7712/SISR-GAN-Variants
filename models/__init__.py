@@ -4,6 +4,7 @@ from models.common import evaluate
 from models.ESPCN import ESPCN
 from models.SRGAN import SRGAN
 from models.EDSR import EDSR
+from models.FSRCNN import FSRCNN
 
 
 def get_generator(model_name):
@@ -13,5 +14,7 @@ def get_generator(model_name):
         return SRGAN
     elif model_name == "edsr":
         return EDSR
+    elif model_name == "fsrcnn":
+        return FSRCNN
     else:
         return ESPCN

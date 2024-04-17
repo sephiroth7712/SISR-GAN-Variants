@@ -1,6 +1,7 @@
 import torch
 from torch.nn import Conv2d, ReLU, BatchNorm2d, Sequential, Module, PixelShuffle, PReLU
 import math
+from common import ResidualBlock
 
 
 class EDSR(Module):
@@ -23,7 +24,7 @@ class EDSR(Module):
 
         # define body module
         m_body = [
-            ResBlock(default_conv, n_feats, kernel_size, act=act, res_scale=self.scale)
+            ResidualBlock(n_feats, kernel_size, batch_norm=False)
             for _ in range(n_resblocks)
         ]
         m_body.append(default_conv(n_feats, n_feats, kernel_size))
@@ -66,59 +67,6 @@ class MeanShift(Conv2d):
         self.bias.data = sign * rgb_range * torch.Tensor(rgb_mean) / std
         for p in self.parameters():
             p.requires_grad = False
-
-
-class BasicBlock(Sequential):
-    def __init__(
-        self,
-        conv,
-        in_channels,
-        out_channels,
-        kernel_size,
-        stride=1,
-        bias=False,
-        bn=True,
-        act=ReLU(True),
-    ):
-
-        m = [conv(in_channels, out_channels, kernel_size, bias=bias)]
-        if bn:
-            m.append(BatchNorm2d(out_channels))
-        if act is not None:
-            m.append(act)
-
-        super(BasicBlock, self).__init__(*m)
-
-
-class ResBlock(Module):
-    def __init__(
-        self,
-        conv,
-        n_feats,
-        kernel_size,
-        bias=True,
-        bn=False,
-        act=ReLU(True),
-        res_scale=1,
-    ):
-
-        super(ResBlock, self).__init__()
-        m = []
-        for i in range(2):
-            m.append(conv(n_feats, n_feats, kernel_size, bias=bias))
-            if bn:
-                m.append(BatchNorm2d(n_feats))
-            if i == 0:
-                m.append(act)
-
-        self.body = Sequential(*m)
-        self.res_scale = res_scale
-
-    def forward(self, x):
-        res = self.body(x).mul(self.res_scale)
-        res += x
-
-        return res
 
 
 class Upsampler(Sequential):
