@@ -49,7 +49,7 @@ class FSRCNN(Module):
         out = self.expand(out)
         out = self.deconv(out)
 
-        return out
+        return torch.clamp_(out, 0.0, 1.0)
 
     def _initialize_weights(self) -> None:
         for m in self.modules():

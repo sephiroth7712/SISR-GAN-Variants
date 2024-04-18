@@ -28,7 +28,7 @@ class EDSR(Module):
 
         # define tail module
         m_tail = [
-            Upsampler(default_conv, scale, n_feats, act=False),
+            Upsampler(default_conv, scale, n_feats, act="prelu"),
             default_conv(n_feats, n_colors, kernel_size),
         ]
 
