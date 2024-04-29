@@ -105,12 +105,23 @@ class TestDatasetFromFolder(Dataset):
     def __getitem__(self, index):
         image_name = self.lr_filenames[index].split("/")[-1]
         lr_image = Image.open(self.lr_filenames[index])
-        w, h = lr_image.size
         hr_image = Image.open(self.hr_filenames[index])
-        hr_scale = Resize(
-            (self.upscale_factor * h, self.upscale_factor * w),
+
+        if lr_image.mode == "L":
+            lr_image = lr_image.convert("RGB")
+        if hr_image.mode == "L":
+            hr_image = hr_image.convert("RGB")
+
+        w, h = hr_image.size
+        w_crop_size = calculate_valid_crop_size(w, self.upscale_factor)
+        h_crop_size = calculate_valid_crop_size(h, self.upscale_factor)
+        lr_scale = Resize(
+            (h_crop_size // self.upscale_factor, w_crop_size // self.upscale_factor),
             interpolation=Image.BICUBIC,
         )
+        hr_image = CenterCrop((h_crop_size, w_crop_size))(hr_image)
+        lr_image = lr_scale(hr_image)
+        hr_scale = Resize((h_crop_size, w_crop_size), interpolation=Image.BICUBIC)
         hr_restore_img = hr_scale(lr_image)
         return (
             image_name,

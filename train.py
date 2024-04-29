@@ -297,7 +297,7 @@ if __name__ == "__main__":
                 )
             )
 
-        if epoch % 100 == 0:
+        if epoch % 200 == 0:
             netG.eval()
             out_path = (
                 "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"

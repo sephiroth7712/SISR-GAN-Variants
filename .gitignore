@@ -9,3 +9,5 @@ test_videos
 outputs
 training_results
 *.log
+slurm_logs
+benchmark_results
