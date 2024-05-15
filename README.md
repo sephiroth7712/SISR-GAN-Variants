@@ -39,11 +39,11 @@ To train and evaluate the models, follow these steps:
 3. Prepare the dataset: Download the DIV2K dataset and place it in the `data/` directory
 4. Train the models: 
 	```bash
-	    python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 8000 --warmup_batches 5000
+	python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 8000 --warmup_batches 5000
 	```
 5. Evaluate the models:
 	```bash
-		python3 test.py --model_name espcn --upscale_factor 4 --ckpt ./path/to/model/checkpoint.pth --image_name ./path/to/image.png
+	python3 test.py --model_name espcn --upscale_factor 4 --ckpt ./path/to/model/checkpoint.pth --image_name ./path/to/image.png
 	```
 
 ## Acknowledgements
