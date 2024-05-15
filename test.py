@@ -22,7 +22,7 @@ parser.add_argument(
 parser.add_argument("--image_name", type=str, help="test low resolution image name")
 parser.add_argument(
     "--model_name",
-    default="pre_netG_epoch_4_5000.pth",
+    default="espcn",
     type=str,
     help="generator model epoch name",
 )
