@@ -8,6 +8,7 @@ This repository contains the code and resources for the project "Evaluation of A
 - [Models](#models)
 - [Dataset](#dataset)
 - [Experimental Setup](#experimental-setup)
+- [Results](#results)
 - [Usage](#usage)
 - [Acknowledgements](#acknowledgements)
 
@@ -31,6 +32,9 @@ The experiments are conducted using the following setup:
 - Image cropping to 128x128 patches for augmentation
 - Evaluation metrics: PSNR and SSIM
 - Testing datasets: Set5 and Set14
+
+## Results
+A qualitative comparison of the results can be found [here](https://imgsli.com/MjU3NzUw/1/9).
 
 ## Usage
 To train and evaluate the models, follow these steps:
