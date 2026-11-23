@@ -1,3 +1,6 @@
+# Copyright 2021 Dakewe Biotech Corporation. All Rights Reserved.
+# Based on Lornatang/FSRCNN-PyTorch (https://github.com/Lornatang/FSRCNN-PyTorch),
+# Apache License 2.0. Modified for this project; see THIRD_PARTY_NOTICES.md.
 from math import sqrt
 import torch
 from torch.nn import Sequential, Conv2d, PReLU, ConvTranspose2d, Module, init

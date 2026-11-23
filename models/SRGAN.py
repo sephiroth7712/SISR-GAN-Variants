@@ -1,3 +1,5 @@
+# Based on leftthomas/SRGAN (https://github.com/leftthomas/SRGAN), MIT License.
+# Modified for this project; see THIRD_PARTY_NOTICES.md.
 from torch.nn import (
     Module,
     Sequential,

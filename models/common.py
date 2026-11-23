@@ -1,3 +1,6 @@
+# ResidualBlock and UpsampleBLock are based on leftthomas/SRGAN
+# (https://github.com/leftthomas/SRGAN), MIT License. Modified for this project;
+# see THIRD_PARTY_NOTICES.md.
 import torch
 from torch.nn import Module, Conv2d, PReLU, PixelShuffle, BatchNorm2d
 from torchmetrics.functional.image import (

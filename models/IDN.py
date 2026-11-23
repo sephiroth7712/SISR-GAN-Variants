@@ -1,3 +1,5 @@
+# Based on yjn870/IDN-pytorch (https://github.com/yjn870/IDN-pytorch), which does not
+# specify a license; see THIRD_PARTY_NOTICES.md.
 import torch
 from torch import nn
 import torch.nn.functional as F

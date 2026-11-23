@@ -1,3 +1,6 @@
+# Copyright 2020 Dakewe Biotech Corporation. All Rights Reserved.
+# Based on Lornatang/ESPCN-PyTorch (https://github.com/Lornatang/ESPCN-PyTorch),
+# Apache License 2.0. Modified for this project; see THIRD_PARTY_NOTICES.md.
 from torch.nn import Module, Sequential, Conv2d, LeakyReLU, PixelShuffle, init
 import torch
 import math

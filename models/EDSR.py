@@ -1,3 +1,5 @@
+# Based on sanghyun-son/EDSR-PyTorch (https://github.com/sanghyun-son/EDSR-PyTorch),
+# MIT License. Modified for this project; see THIRD_PARTY_NOTICES.md.
 import torch
 from torch.nn import Conv2d, ReLU, BatchNorm2d, Sequential, Module, PixelShuffle, PReLU
 import math
