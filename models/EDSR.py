@@ -13,7 +13,6 @@ class EDSR(Module):
         kernel_size = 3
         self.scale = scale
         self.ngpu = ngpu
-        act = ReLU(True)
         n_colors = 3
 
         # define head module

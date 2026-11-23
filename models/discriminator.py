@@ -5,7 +5,6 @@ from torch.nn import (
     LeakyReLU,
     BatchNorm2d,
     AdaptiveAvgPool2d,
-    init,
 )
 from torch import sigmoid
 
@@ -43,14 +42,6 @@ class Discriminator(Module):
             LeakyReLU(0.2),
             Conv2d(1024, 1, kernel_size=1),
         )
-
-    def _initialize_weights(self):
-        for m in self.modules:
-            if isinstance(m, Conv2d):
-                init.normal_(m.weight.data, 0.0, 0.02)
-            elif isinstance(m, BatchNorm2d):
-                init.normal_(m.weight.data, 1.0, 0.02)
-                init.constant_(m.bias.data, 0)
 
     def forward(self, x):
         batch_size = x.size(0)

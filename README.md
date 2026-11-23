@@ -104,6 +104,10 @@ Run all commands from the repository root.
 	python3 test_video.py --model_name espcn --upscale_factor 4 --ckpt netG_epoch_4_2000.pth --video_name path/to/video.mp4
 	```
 	This writes the upscaled video to `out_srf_<scale>_<video file name without extension>.avi` in the current directory, and a side-by-side comparison with bicubic upscaling to `compare_srf_<scale>_<video file name without extension>.avi`.
+8. Upscale an image with plain bicubic interpolation, for a visual baseline:
+	```bash
+	python3 bicubic.py --image path/to/image.png --scale 4 --output upscaled_image.png
+	```
 
 ## Acknowledgements
 We would like to acknowledge the following repositories for their valuable code contributions:

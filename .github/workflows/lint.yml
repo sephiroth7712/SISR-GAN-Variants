@@ -1,0 +1,20 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  ruff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+      - name: Install ruff
+        run: pip install ruff==0.17.6
+      - name: Lint
+        run: ruff check .
+      - name: Check that every file compiles
+        run: python -m compileall -q .

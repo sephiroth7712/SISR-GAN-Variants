@@ -3,20 +3,18 @@ import os
 import random
 
 import numpy as np
-import pandas as pd
+import torch
 import torch.optim as optim
-import torch.utils.data
 import torchvision.utils as vutils
-from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-import torch
 from data import TrainDatasetFromFolder, ValDatasetFromFolder, display_transform
 from loss import GeneratorLoss, PixelLoss, ensure_vgg_weights
-from models.common import ssim, psnr
-from models.discriminator import Discriminator
 from models import GENERATORS, get_generator
+from models.common import psnr, ssim
+from models.discriminator import Discriminator
+from utils import get_device
 
 parser = argparse.ArgumentParser(description="Train Super Resolution Models")
 parser.add_argument(
@@ -37,7 +35,6 @@ parser.add_argument(
     help="super resolution upscale factor",
 )
 parser.add_argument("--num_epochs", default=100, type=int, help="train epoch number")
-parser.add_argument("--num_gpu", default=1, type=int, help="Number of GPUs to use")
 parser.add_argument(
     "--warmup_epochs",
     "--warmup_batches",
@@ -52,6 +49,49 @@ parser.add_argument(
     type=int,
     help="random seed for a reproducible run (default: not seeded)",
 )
+# Accepted so that old commands keep working; training always uses a single device.
+parser.add_argument("--num_gpu", default=1, type=int, help=argparse.SUPPRESS)
+
+
+def validate(netG, val_loader, device, out_path, epoch, save_desc):
+    """Score netG on the validation set and save grids of (bicubic, HR, SR) images."""
+    netG.eval()
+    os.makedirs(out_path, exist_ok=True)
+    with torch.no_grad():
+        val_bar = tqdm(val_loader)
+        valing_results = {"ssims": 0, "psnrs": 0, "psnr": 0, "ssim": 0, "batch_sizes": 0}
+        val_images = []
+        for val_lr, val_hr_restore, val_hr in val_bar:
+            batch_size = val_lr.size(0)
+            valing_results["batch_sizes"] += batch_size
+            lr = val_lr.to(device)
+            hr = val_hr.to(device)
+            sr = netG(lr)
+
+            valing_results["ssims"] += ssim(sr, hr) * batch_size
+            valing_results["psnrs"] += psnr(sr, hr) * batch_size
+            valing_results["psnr"] = valing_results["psnrs"] / valing_results["batch_sizes"]
+            valing_results["ssim"] = valing_results["ssims"] / valing_results["batch_sizes"]
+            val_bar.set_description(
+                desc="[converting LR images to SR images] PSNR: %.4f dB SSIM: %.4f"
+                % (valing_results["psnr"], valing_results["ssim"])
+            )
+
+            val_images.extend(
+                [
+                    display_transform()(val_hr_restore.squeeze(0)),
+                    display_transform()(hr.cpu().squeeze(0)),
+                    display_transform()(sr.cpu().squeeze(0)),
+                ]
+            )
+        val_images = torch.split(torch.stack(val_images), 15)
+        for index, image in enumerate(tqdm(val_images, desc=save_desc), start=1):
+            image = vutils.make_grid(image, nrow=3, padding=5)
+            vutils.save_image(
+                image, out_path + "epoch_%d_index_%d.png" % (epoch, index), padding=5
+            )
+    return valing_results
+
 
 if __name__ == "__main__":
     opt = parser.parse_args()
@@ -67,10 +107,11 @@ if __name__ == "__main__":
     UPSCALE_FACTOR = opt.upscale_factor
     NUM_EPOCHS = opt.num_epochs
     MODEL_NAME = opt.model_name
-    N_GPU = opt.num_gpu
     WARMUP_EPOCHS = opt.warmup_epochs
+    device = get_device()
+    ckpt_dir = os.path.join("epochs", MODEL_NAME)
 
-    os.makedirs(os.path.join("epochs", MODEL_NAME), exist_ok=True)
+    os.makedirs(ckpt_dir, exist_ok=True)
     # Fail now, not after the warm-up phase, if the VGG16 weights can't be downloaded.
     ensure_vgg_weights()
 
@@ -83,15 +124,13 @@ if __name__ == "__main__":
     )
     val_loader = DataLoader(dataset=val_set, num_workers=4, batch_size=1, shuffle=False)
 
-    netG = get_generator(MODEL_NAME)(N_GPU, UPSCALE_FACTOR)
+    netG = get_generator(MODEL_NAME)(1, UPSCALE_FACTOR)
     optimizerG = optim.Adam(netG.parameters())
     print("# generator parameters:", sum(param.numel() for param in netG.parameters()))
 
     pixel_criterion = PixelLoss()
-
-    if torch.cuda.is_available():
-        netG.cuda()
-        pixel_criterion.cuda()
+    netG.to(device)
+    pixel_criterion.to(device)
 
     print(f"# pretraining the generator for {WARMUP_EPOCHS} epochs")
     for epoch in range(1, WARMUP_EPOCHS + 1):
@@ -102,12 +141,8 @@ if __name__ == "__main__":
             batch_size = data.size(0)
             running_results["batch_sizes"] += batch_size
 
-            real_img = Variable(target)
-            if torch.cuda.is_available():
-                real_img = real_img.cuda()
-            z = Variable(data)
-            if torch.cuda.is_available():
-                z = z.cuda()
+            real_img = target.to(device)
+            z = data.to(device)
             fake_img = netG(z)
             netG.zero_grad()
 
@@ -127,134 +162,50 @@ if __name__ == "__main__":
                 )
             )
 
-        netG.eval()
-        out_path = (
-            "pre_training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
-        )
-        if not os.path.exists(out_path):
-            os.makedirs(out_path)
-
         if epoch % 20 == 0 or epoch == WARMUP_EPOCHS:
-            with torch.no_grad():
-                val_bar = tqdm(val_loader)
-                valing_results = {
-                    "mse": 0,
-                    "ssims": 0,
-                    "psnrs": 0,
-                    "psnr": 0,
-                    "ssim": 0,
-                    "batch_sizes": 0,
-                }
-                val_images = []
-                for val_lr, val_hr_restore, val_hr in val_bar:
-                    batch_size = val_lr.size(0)
-                    valing_results["batch_sizes"] += batch_size
-                    lr = val_lr
-                    hr = val_hr
-                    if torch.cuda.is_available():
-                        lr = lr.cuda()
-                        hr = hr.cuda()
-                    sr = netG(lr)
-
-                    batch_mse = ((sr - hr) ** 2).data.mean()
-                    valing_results["mse"] += batch_mse * batch_size
-                    batch_ssim = ssim(sr, hr)
-                    valing_results["ssims"] += batch_ssim * batch_size
-                    valing_results["psnrs"] += psnr(sr, hr) * batch_size
-                    valing_results["psnr"] = (
-                        valing_results["psnrs"] / valing_results["batch_sizes"]
-                    )
-                    valing_results["ssim"] = (
-                        valing_results["ssims"] / valing_results["batch_sizes"]
-                    )
-                    val_bar.set_description(
-                        desc="[converting LR images to SR images] PSNR: %.4f dB SSIM: %.4f"
-                        % (valing_results["psnr"], valing_results["ssim"])
-                    )
-
-                    val_images.extend(
-                        [
-                            display_transform()(val_hr_restore.squeeze(0)),
-                            display_transform()(hr.data.cpu().squeeze(0)),
-                            display_transform()(sr.data.cpu().squeeze(0)),
-                        ]
-                    )
-                val_images = torch.stack(val_images)
-                val_images = torch.split(val_images, 15)
-                val_save_bar = tqdm(val_images, desc="[saving pre training results]")
-                index = 1
-                for image in val_save_bar:
-                    image = vutils.make_grid(image, nrow=3, padding=5)
-                    vutils.save_image(
-                        image,
-                        out_path + "epoch_%d_index_%d.png" % (epoch, index),
-                        padding=5,
-                    )
-                    index += 1
-
+            validate(
+                netG,
+                val_loader,
+                device,
+                "pre_training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/",
+                epoch,
+                "[saving pre training results]",
+            )
             torch.save(
                 netG.state_dict(),
-                "epochs/"
-                + MODEL_NAME
-                + "/pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch),
+                os.path.join(ckpt_dir, "pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch)),
             )
 
-    # Reloading the Generator with latest weights after warmup
-    netG = get_generator(MODEL_NAME)(N_GPU, UPSCALE_FACTOR)
+    # Rebuild the generator (with a fresh optimizer) and load the last warm-up weights.
+    # The rebuild also keeps the random number sequence of the original training runs.
+    netG = get_generator(MODEL_NAME)(1, UPSCALE_FACTOR)
     optimizerG = optim.Adam(netG.parameters())
-    if torch.cuda.is_available():
-        netG.cuda()
+    netG.to(device)
 
     if WARMUP_EPOCHS > 0:
         netG.load_state_dict(
             torch.load(
-                "epochs/"
-                + MODEL_NAME
-                + "/pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, WARMUP_EPOCHS)
+                os.path.join(
+                    ckpt_dir, "pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, WARMUP_EPOCHS)
+                ),
+                map_location=device,
+                weights_only=True,
             )
         )
 
-    # netG.load_state_dict(
-    #     torch.load(
-    #         "epochs/" + MODEL_NAME + "/pre_netG_epoch_%d_0.pth" % (UPSCALE_FACTOR)
-    #     )
-    # )
-
-    # netG.load_state_dict(
-    #     torch.load(
-    #         "epochs/" + MODEL_NAME + "/netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
-    #     )
-    # )
-
-    netD = Discriminator(N_GPU)
+    netD = Discriminator(1)
     print(
         "# discriminator parameters:", sum(param.numel() for param in netD.parameters())
     )
 
-    # netD.load_state_dict(
-    #     torch.load(
-    #         "epochs/" + MODEL_NAME + "/netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, 2000)
-    #     )
-    # )
-
     generator_criterion = GeneratorLoss()
     discriminator_criterion = torch.nn.BCELoss()
 
-    if torch.cuda.is_available():
-        netD.cuda()
-        generator_criterion.cuda()
-        discriminator_criterion.cuda()
+    netD.to(device)
+    generator_criterion.to(device)
+    discriminator_criterion.to(device)
 
     optimizerD = optim.Adam(netD.parameters())
-
-    results = {
-        "d_loss": [],
-        "g_loss": [],
-        "d_score": [],
-        "g_score": [],
-        "psnr": [],
-        "ssim": [],
-    }
 
     for epoch in range(1, NUM_EPOCHS + 1):
         train_bar = tqdm(train_loader)
@@ -269,19 +220,14 @@ if __name__ == "__main__":
         netG.train()
         netD.train()
         for data, target in train_bar:
-            g_update_first = True
             batch_size = data.size(0)
             running_results["batch_sizes"] += batch_size
 
             ############################
             # (1) Update D network: maximize D(x)-1-D(G(z))
             ###########################
-            real_img = Variable(target)
-            if torch.cuda.is_available():
-                real_img = real_img.cuda()
-            z = Variable(data)
-            if torch.cuda.is_available():
-                z = z.cuda()
+            real_img = target.to(device)
+            z = data.to(device)
             fake_img = netG(z)
 
             netD.zero_grad()
@@ -329,111 +275,20 @@ if __name__ == "__main__":
             )
 
         if epoch % 200 == 0 or epoch == NUM_EPOCHS:
-            netG.eval()
-            out_path = (
-                "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
+            validate(
+                netG,
+                val_loader,
+                device,
+                "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/",
+                epoch,
+                "[saving training results]",
             )
-            if not os.path.exists(out_path):
-                os.makedirs(out_path)
-
-            with torch.no_grad():
-                val_bar = tqdm(val_loader)
-                valing_results = {
-                    "mse": 0,
-                    "ssims": 0,
-                    "psnrs": 0,
-                    "psnr": 0,
-                    "ssim": 0,
-                    "batch_sizes": 0,
-                }
-                val_images = []
-                for val_lr, val_hr_restore, val_hr in val_bar:
-                    batch_size = val_lr.size(0)
-                    valing_results["batch_sizes"] += batch_size
-                    lr = val_lr
-                    hr = val_hr
-                    if torch.cuda.is_available():
-                        lr = lr.cuda()
-                        hr = hr.cuda()
-                    sr = netG(lr)
-
-                    batch_mse = ((sr - hr) ** 2).data.mean()
-                    valing_results["mse"] += batch_mse * batch_size
-                    batch_ssim = ssim(sr, hr)
-                    valing_results["ssims"] += batch_ssim * batch_size
-                    valing_results["psnrs"] += psnr(sr, hr) * batch_size
-                    valing_results["psnr"] = (
-                        valing_results["psnrs"] / valing_results["batch_sizes"]
-                    )
-                    valing_results["ssim"] = (
-                        valing_results["ssims"] / valing_results["batch_sizes"]
-                    )
-                    val_bar.set_description(
-                        desc="[converting LR images to SR images] PSNR: %.4f dB SSIM: %.4f"
-                        % (valing_results["psnr"], valing_results["ssim"])
-                    )
-
-                    val_images.extend(
-                        [
-                            display_transform()(val_hr_restore.squeeze(0)),
-                            display_transform()(hr.data.cpu().squeeze(0)),
-                            display_transform()(sr.data.cpu().squeeze(0)),
-                        ]
-                    )
-                val_images = torch.stack(val_images)
-                val_images = torch.split(val_images, 15)
-                val_save_bar = tqdm(val_images, desc="[saving training results]")
-                index = 1
-                for image in val_save_bar:
-                    image = vutils.make_grid(image, nrow=3, padding=5)
-                    vutils.save_image(
-                        image,
-                        out_path + "epoch_%d_index_%d.png" % (epoch, index),
-                        padding=5,
-                    )
-                    index += 1
-
             # save model parameters
             torch.save(
                 netG.state_dict(),
-                "epochs/"
-                + MODEL_NAME
-                + "/netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch),
+                os.path.join(ckpt_dir, "netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch)),
             )
             torch.save(
                 netD.state_dict(),
-                "epochs/"
-                + MODEL_NAME
-                + "/netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch),
+                os.path.join(ckpt_dir, "netD_epoch_%d_%d.pth" % (UPSCALE_FACTOR, epoch)),
             )
-            # save loss\scores\psnr\ssim
-            # results["d_loss"].append(
-            #     running_results["d_loss"] / running_results["batch_sizes"]
-            # )
-            # results["g_loss"].append(
-            #     running_results["g_loss"] / running_results["batch_sizes"]
-            # )
-            # results["d_score"].append(
-            #     running_results["d_score"] / running_results["batch_sizes"]
-            # )
-            # results["g_score"].append(
-            #     running_results["g_score"] / running_results["batch_sizes"]
-            # )
-            # results["psnr"].append(valing_results["psnr"])
-            # results["ssim"].append(valing_results["ssim"])
-            # out_path = "statistics/"
-            # data_frame = pd.DataFrame(
-            #     data={
-            #         "Loss_D": results["d_loss"].cpu(),
-            #         "Loss_G": results["g_loss"].cpu(),
-            #         "Score_D": results["d_score"].cpu(),
-            #         "Score_G": results["g_score"].cpu(),
-            #         "PSNR": results["psnr"].cpu(),
-            #         "SSIM": results["ssim"],
-            #     },
-            #     index=range(1, epoch + 1),
-            # )
-            # data_frame.to_csv(
-            #     out_path + "srf_" + str(UPSCALE_FACTOR) + "_train_results.csv",
-            #     index_label="Epoch",
-            # )

@@ -56,45 +56,17 @@ if __name__ == "__main__":
         int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR),
         int(videoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)) * UPSCALE_FACTOR,
     )
-    compared_video_size = (
-        int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR * 2 + 10),
-        int(videoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT)) * UPSCALE_FACTOR
-        + 10
-        + int(
-            int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR * 2 + 10)
-            / int(
-                10
-                * int(
-                    int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR)
-                    // 5
-                    + 1
-                )
-            )
-            * int(
-                int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH) * UPSCALE_FACTOR) // 5
-                - 9
-            )
-        ),
-    )
     video_stem = os.path.splitext(os.path.basename(VIDEO_NAME))[0]
     output_sr_name = "out_srf_" + str(UPSCALE_FACTOR) + "_" + video_stem + ".avi"
     output_compared_name = (
         "compare_srf_" + str(UPSCALE_FACTOR) + "_" + video_stem + ".avi"
     )
-    sr_video_writer = cv2.VideoWriter(
-        output_sr_name, cv2.VideoWriter_fourcc("M", "P", "E", "G"), fps, sr_video_size
-    )
-    compared_video_writer = cv2.VideoWriter(
-        output_compared_name,
-        cv2.VideoWriter_fourcc("M", "P", "E", "G"),
-        fps,
-        compared_video_size,
-    )
-    if not (sr_video_writer.isOpened() and compared_video_writer.isOpened()):
-        raise IOError(
-            "Could not open the output videos '%s' and '%s'"
-            % (output_sr_name, output_compared_name)
-        )
+    fourcc = cv2.VideoWriter_fourcc("M", "P", "E", "G")
+    sr_video_writer = cv2.VideoWriter(output_sr_name, fourcc, fps, sr_video_size)
+    if not sr_video_writer.isOpened():
+        raise IOError("Could not open the output video '%s'" % output_sr_name)
+    # Opened once the first comparison frame exists, so its size always matches.
+    compared_video_writer = None
     # read frame
     success, frame = videoCapture.read()
     test_bar = tqdm(
@@ -157,7 +129,21 @@ if __name__ == "__main__":
                     )(ToPILImage()(bottom_image))
                 )
                 final_image = np.concatenate((top_image, bottom_image))
+                if compared_video_writer is None:
+                    height, width = final_image.shape[:2]
+                    compared_video_writer = cv2.VideoWriter(
+                        output_compared_name, fourcc, fps, (width, height)
+                    )
+                    if not compared_video_writer.isOpened():
+                        raise IOError(
+                            "Could not open the output video '%s'" % output_compared_name
+                        )
                 # save compared video (OpenCV writes BGR)
                 compared_video_writer.write(cv2.cvtColor(final_image, cv2.COLOR_RGB2BGR))
                 # next frame
                 success, frame = videoCapture.read()
+
+    videoCapture.release()
+    sr_video_writer.release()
+    if compared_video_writer is not None:
+        compared_video_writer.release()
