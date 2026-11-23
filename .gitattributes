@@ -1,0 +1,16 @@
+# Store text files with LF in the repo and check them out with LF everywhere
+# (Windows, WSL, Linux, macOS), regardless of each machine's core.autocrlf.
+* text=auto eol=lf
+
+# Shell scripts must be LF: bash/SLURM fail on "\r" (e.g. "/bin/bash^M").
+*.sh text eol=lf
+
+# Binary files: never diff or convert.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.bmp binary
+*.avi binary
+*.mp4 binary
+*.pth binary
+*.pt binary

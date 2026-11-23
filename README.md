@@ -34,7 +34,7 @@ The experiments are conducted using the following setup:
 - Testing datasets: Set5 and Set14
 
 ## Results
-A qualitative comparison of the results can be found [here](https://imgsli.com/MjU3NzUw/1/9).
+A qualitative comparison of the results can be found [here](https://imgversus.com/a/w3S22qqV).
 
 ## Usage
 To train and evaluate the models, follow these steps:
@@ -44,6 +44,10 @@ To train and evaluate the models, follow these steps:
 4. Train the models: 
 	```bash
 	python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 8000 --warmup_batches 5000
+	```
+	On a SLURM cluster, submit the matching script from the repository root instead:
+	```bash
+	sbatch slurm_scripts/espcn_slurm_script.sh
 	```
 5. Evaluate the models:
 	```bash

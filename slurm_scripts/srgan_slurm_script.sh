@@ -11,6 +11,6 @@ module load anaconda3
 
 conda activate espgan_pytorch
 
-cd /lustre/home/kurisummootr/CMSC636/Project/ESPGAN-PyTorch
+cd "$SLURM_SUBMIT_DIR"
 
 python3 train.py --model_name srgan --crop_size 128 --upscale_factor 4 --num_epochs 2000 --warmup_batches 400

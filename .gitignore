@@ -1,13 +1,36 @@
-epochs
-__pycache__
-data
-pre_training_results
-statistics
-test_images
-venv
-test_videos
-outputs
-training_results
+# Python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# Datasets and test inputs (download separately, see README)
+data/
+test_images/
+test_videos/
+
+# Checkpoints and training/evaluation outputs
+epochs/
+*.pth
+*.pt
+pre_training_results/
+training_results/
+benchmark_results/
+statistics/
+outputs/
+out_srf_*
+compare_srf_*
+
+# Logs
 *.log
-slurm_logs
-benchmark_results
+slurm_logs/
+
+# Editor / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Generated codebase dumps
+repomix-output.txt
