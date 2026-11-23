@@ -3,21 +3,25 @@ import os
 import pandas as pd
 import torch.optim as optim
 import torch.utils.data
-import torchvision.utils as utils
+import torchvision.utils as vutils
 from torch.autograd import Variable
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 import torch
 from data import TrainDatasetFromFolder, ValDatasetFromFolder, display_transform
-from loss import GeneratorLoss, PixelLoss
+from loss import GeneratorLoss, PixelLoss, ensure_vgg_weights
 from models.common import ssim, psnr
 from models.discriminator import Discriminator
-from models import get_generator
+from models import GENERATORS, get_generator
 
 parser = argparse.ArgumentParser(description="Train Super Resolution Models")
 parser.add_argument(
-    "--model_name", default="espcn", type=str, help="name of the super resolution model"
+    "--model_name",
+    default="espcn",
+    type=str,
+    choices=sorted(GENERATORS),
+    help="name of the super resolution model",
 )
 parser.add_argument(
     "--crop_size", default=88, type=int, help="training images crop size"
@@ -32,10 +36,12 @@ parser.add_argument(
 parser.add_argument("--num_epochs", default=100, type=int, help="train epoch number")
 parser.add_argument("--num_gpu", default=1, type=int, help="Number of GPUs to use")
 parser.add_argument(
+    "--warmup_epochs",
     "--warmup_batches",
     default=500,
     type=int,
-    help="Number of warmup batches for the generator",
+    help="number of generator pre-training (warm-up) epochs before GAN training "
+    "(--warmup_batches is the old name of this option)",
 )
 
 if __name__ == "__main__":
@@ -46,7 +52,11 @@ if __name__ == "__main__":
     NUM_EPOCHS = opt.num_epochs
     MODEL_NAME = opt.model_name
     N_GPU = opt.num_gpu
-    WARMUP_BATCHES = opt.warmup_batches
+    WARMUP_EPOCHS = opt.warmup_epochs
+
+    os.makedirs(os.path.join("epochs", MODEL_NAME), exist_ok=True)
+    # Fail now, not after the warm-up phase, if the VGG16 weights can't be downloaded.
+    ensure_vgg_weights()
 
     train_set = TrainDatasetFromFolder(
         "data/DIV2K_train_HR", crop_size=CROP_SIZE, upscale_factor=UPSCALE_FACTOR
@@ -67,8 +77,8 @@ if __name__ == "__main__":
         netG.cuda()
         pixel_criterion.cuda()
 
-    print(f"# pretraining the generator for {WARMUP_BATCHES} steps")
-    for epoch in range(1, WARMUP_BATCHES + 1):
+    print(f"# pretraining the generator for {WARMUP_EPOCHS} epochs")
+    for epoch in range(1, WARMUP_EPOCHS + 1):
         train_bar = tqdm(train_loader)
         running_results = {"batch_sizes": 0, "loss": 0}
         netG.train()
@@ -96,7 +106,7 @@ if __name__ == "__main__":
                 desc="[%d/%d] Loss: %.4f"
                 % (
                     epoch,
-                    WARMUP_BATCHES,
+                    WARMUP_EPOCHS,
                     running_results["loss"] / running_results["batch_sizes"],
                 )
             )
@@ -108,7 +118,7 @@ if __name__ == "__main__":
         if not os.path.exists(out_path):
             os.makedirs(out_path)
 
-        if epoch % 20 == 0:
+        if epoch % 20 == 0 or epoch == WARMUP_EPOCHS:
             with torch.no_grad():
                 val_bar = tqdm(val_loader)
                 valing_results = {
@@ -150,12 +160,12 @@ if __name__ == "__main__":
                         ]
                     )
                 val_images = torch.stack(val_images)
-                val_images = torch.chunk(val_images, val_images.size(0) // 15)
+                val_images = torch.split(val_images, 15)
                 val_save_bar = tqdm(val_images, desc="[saving pre training results]")
                 index = 1
                 for image in val_save_bar:
-                    image = utils.make_grid(image, nrow=3, padding=5)
-                    utils.save_image(
+                    image = vutils.make_grid(image, nrow=3, padding=5)
+                    vutils.save_image(
                         image,
                         out_path + "epoch_%d_index_%d.png" % (epoch, index),
                         padding=5,
@@ -175,13 +185,14 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         netG.cuda()
 
-    netG.load_state_dict(
-        torch.load(
-            "epochs/"
-            + MODEL_NAME
-            + "/pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, WARMUP_BATCHES)
+    if WARMUP_EPOCHS > 0:
+        netG.load_state_dict(
+            torch.load(
+                "epochs/"
+                + MODEL_NAME
+                + "/pre_netG_epoch_%d_%d.pth" % (UPSCALE_FACTOR, WARMUP_EPOCHS)
+            )
         )
-    )
 
     # netG.load_state_dict(
     #     torch.load(
@@ -297,7 +308,7 @@ if __name__ == "__main__":
                 )
             )
 
-        if epoch % 200 == 0:
+        if epoch % 200 == 0 or epoch == NUM_EPOCHS:
             netG.eval()
             out_path = (
                 "training_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
@@ -346,12 +357,12 @@ if __name__ == "__main__":
                         ]
                     )
                 val_images = torch.stack(val_images)
-                val_images = torch.chunk(val_images, val_images.size(0) // 15)
+                val_images = torch.split(val_images, 15)
                 val_save_bar = tqdm(val_images, desc="[saving training results]")
                 index = 1
                 for image in val_save_bar:
-                    image = utils.make_grid(image, nrow=3, padding=5)
-                    utils.save_image(
+                    image = vutils.make_grid(image, nrow=3, padding=5)
+                    vutils.save_image(
                         image,
                         out_path + "epoch_%d_index_%d.png" % (epoch, index),
                         padding=5,

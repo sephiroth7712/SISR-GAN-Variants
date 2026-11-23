@@ -7,10 +7,11 @@
 #SBATCH --cpus-per-task 4
 #SBATCH --mem 8G
 
+# Adjust the partition, module and conda environment names for your cluster.
 module load anaconda3
 
 conda activate espgan_pytorch
 
 cd "$SLURM_SUBMIT_DIR"
 
-python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 8000 --warmup_batches 5000
+python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 2000 --warmup_epochs 400

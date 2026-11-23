@@ -22,8 +22,24 @@ The following generator models are investigated in this study:
 - IDN: Information Distillation Network
 - SRResNet: Super-Resolution Residual Network (baseline)
 
+The scripts select a generator with `--model_name`: `espcn`, `fsrcnn`, `idn`, `srgan` (the SRResNet baseline generator) or `edsr` (an EDSR generator, also included in the code).
+
 ## Dataset
-The models are trained and evaluated on the DIV2K dataset, a widely used benchmark for SISR tasks. The dataset consists of high-quality images with diverse contents and realistic degradations.
+The models are trained and evaluated on the DIV2K dataset, a widely used benchmark for SISR tasks. The dataset consists of high-quality images with diverse contents and realistic degradations. Download the high-resolution training and validation images from the [DIV2K website](https://data.vision.ee.ethz.ch/cvl/DIV2K/). The Set5 and Set14 benchmark images are used for testing; they are available from several sources, for example the `data/` folder of the [SelfExSR repository](https://github.com/jbhuang0604/SelfExSR) (use the `*_HR.png` files).
+
+The scripts expect this layout, relative to the repository root:
+
+```
+data/
+├── DIV2K_train_HR/      # 800 training images (0001.png ... 0800.png)
+├── DIV2K_valid_HR/      # 100 validation images (0801.png ... 0900.png)
+└── test/
+    └── SRF_4/           # one folder per upscale factor: SRF_2, SRF_4, SRF_8
+        ├── data/        # one file per test image, e.g. Set5_baby.png (only the names are used)
+        └── target/      # the high-resolution test images, with the same file names
+```
+
+Prefix every benchmark image with its dataset name (`Set5_`, `Set14_`): `test_benchmark.py` groups its results by the part of the file name before the first underscore. For each file name in `data/` it loads the image with that name from `target/` and creates the low-resolution input from it by bicubic downsampling, so `data/` can simply hold copies of the `target/` images.
 
 ## Experimental Setup
 The experiments are conducted using the following setup:
@@ -37,22 +53,46 @@ The experiments are conducted using the following setup:
 A qualitative comparison of the results can be found [here](https://imgversus.com/a/w3S22qqV).
 
 ## Usage
-To train and evaluate the models, follow these steps:
+Run all commands from the repository root.
+
 1. Clone the repository: `git clone https://github.com/sephiroth7712/SISR-GAN-Variants.git`
-2. Install the required dependencies: `pip install -r requirements.txt`
-3. Prepare the dataset: Download the DIV2K dataset and place it in the `data/` directory
-4. Train the models: 
+2. Create an environment with Python 3.9–3.12 and install the dependencies:
 	```bash
-	python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --num_epochs 8000 --warmup_batches 5000
+	conda create -n espgan_pytorch python=3.10
+	conda activate espgan_pytorch
+	pip install -r requirements.txt
 	```
-	On a SLURM cluster, submit the matching script from the repository root instead:
+	The SLURM scripts activate an environment with this name. On Windows, PyPI only provides a CPU build of PyTorch; use the selector on [pytorch.org](https://pytorch.org/get-started/locally/) to install a CUDA build.
+3. Prepare the datasets as described in [Dataset](#dataset).
+4. Train a model:
+	```bash
+	python3 train.py --model_name espcn --crop_size 128 --upscale_factor 4 --warmup_epochs 400 --num_epochs 2000
+	```
+	`--warmup_epochs` is the number of epochs the generator is pre-trained with a pixel (MSE) loss before GAN training starts; `--warmup_batches` is accepted as an older name for it. Checkpoints are written to `epochs/<model_name>/`: `pre_netG_epoch_<scale>_<epoch>.pth` every 20 pre-training epochs, and `netG_epoch_<scale>_<epoch>.pth` and `netD_epoch_<scale>_<epoch>.pth` every 200 GAN epochs. The last epoch of each phase is always saved. Sample validation images go to `pre_training_results/` and `training_results/`.
+
+	On a SLURM cluster, submit the matching script instead. `slurm_scripts/` holds the command used for each model:
 	```bash
 	sbatch slurm_scripts/espcn_slurm_script.sh
 	```
-5. Evaluate the models:
+	The GAN phase uses a VGG16 perceptual loss whose ImageNet weights (about 530 MB) are downloaded when training starts. If your compute nodes have no internet access, download them once on a login node:
 	```bash
-	python3 test.py --model_name espcn --upscale_factor 4 --ckpt ./path/to/model/checkpoint.pth --image_name ./path/to/image.png
+	python3 -c "from loss import ensure_vgg_weights; ensure_vgg_weights()"
 	```
+5. Upscale a single image:
+	```bash
+	python3 test.py --model_name espcn --upscale_factor 4 --ckpt netG_epoch_4_2000.pth --image_name path/to/image.png
+	```
+	`--ckpt` is a file name in `epochs/<model_name>/` or a path to a `.pth` file. The result is saved as `out_srf_<scale>_<image name>` in the current directory. The script uses the GPU when one is available; add `--test_mode CPU` to run on the CPU.
+6. Evaluate on Set5 and Set14:
+	```bash
+	python3 test_benchmark.py --model_name espcn --upscale_factor 4 --pre_ckpt pre_netG_epoch_4_400.pth --gan_ckpt netG_epoch_4_2000.pth
+	```
+	This scores the generator after pre-training and after GAN training. Side-by-side images go to `benchmark_results/<model_name>/SRF_<scale>/` and the average scores per dataset to `statistics/<model_name>_srf_<scale>_test_results.csv`.
+7. Upscale a video:
+	```bash
+	python3 test_video.py --model_name espcn --upscale_factor 4 --ckpt netG_epoch_4_2000.pth --video_name path/to/video.mp4
+	```
+	This writes the upscaled video to `out_srf_<scale>_<video file name without extension>.avi` in the current directory, and a side-by-side comparison with bicubic upscaling to `compare_srf_<scale>_<video file name without extension>.avi`.
 
 ## Acknowledgements
 We would like to acknowledge the following repositories for their valuable code contributions:

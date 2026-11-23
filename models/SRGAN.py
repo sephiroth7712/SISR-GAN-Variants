@@ -15,6 +15,10 @@ from models.common import ResidualBlock
 
 class SRGAN(Module):
     def __init__(self, ngpu, scale):
+        if scale < 2 or scale & (scale - 1):
+            raise ValueError(
+                "The SRGAN generator supports power-of-2 scales only, got %d" % scale
+            )
         upsample_block_num = int(math.log(scale, 2))
         super(SRGAN, self).__init__()
 

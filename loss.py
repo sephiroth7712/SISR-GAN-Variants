@@ -1,6 +1,21 @@
+import os
+
 import torch
 from torch import nn
 from torchvision.models.vgg import vgg16, VGG16_Weights
+
+
+def ensure_vgg_weights():
+    """Download the VGG16 weights used by GeneratorLoss unless they are already cached.
+
+    train.py calls this at start-up, so a machine without internet access fails
+    immediately instead of after the warm-up phase.
+    """
+    cached = os.path.join(
+        torch.hub.get_dir(), "checkpoints", os.path.basename(VGG16_Weights.DEFAULT.url)
+    )
+    if not os.path.isfile(cached):
+        VGG16_Weights.DEFAULT.get_state_dict(progress=True, check_hash=True)
 
 
 class GeneratorLoss(nn.Module):

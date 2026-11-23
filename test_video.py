@@ -1,33 +1,41 @@
 import argparse
+import os
 
 import cv2
 import numpy as np
 import torch
 import torchvision.transforms as transforms
 from PIL import Image
-from torch.autograd import Variable
 from torchvision.transforms import ToTensor, ToPILImage
 from tqdm import tqdm
 
-from models import get_generator
+from models import GENERATORS
+from utils import get_device, load_generator
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Test Single Video")
     parser.add_argument(
-        "--upscale_factor", default=4, type=int, help="super resolution upscale factor"
+        "--upscale_factor",
+        default=4,
+        type=int,
+        choices=[2, 4, 8],
+        help="super resolution upscale factor",
     )
-    parser.add_argument("--video_name", type=str, help="test low resolution video name")
+    parser.add_argument(
+        "--video_name", type=str, required=True, help="low resolution video to upscale"
+    )
     parser.add_argument(
         "--model_name",
         default="espcn",
         type=str,
-        help="generator model epoch name",
+        choices=sorted(GENERATORS),
+        help="generator model name",
     )
     parser.add_argument(
         "--ckpt",
         default="pre_netG_epoch_4_400.pth",
         type=str,
-        help="generator model checkpoint file after pre-training",
+        help="generator checkpoint: a file name in epochs/<model_name>/ or a path to a .pth file",
     )
     opt = parser.parse_args()
 
@@ -36,14 +44,12 @@ if __name__ == "__main__":
     MODEL_NAME = opt.model_name
     CKPT = opt.ckpt
 
-    model = get_generator(MODEL_NAME)(1, UPSCALE_FACTOR)
-    if torch.cuda.is_available():
-        model = model.cuda()
-    # for cpu
-    # model.load_state_dict(torch.load('epochs/' + MODEL_NAME, map_location=lambda storage, loc: storage))
-    model.load_state_dict(torch.load("epochs/" + MODEL_NAME + "/" + CKPT))
+    device = get_device()
+    model = load_generator(MODEL_NAME, UPSCALE_FACTOR, CKPT, device)
 
     videoCapture = cv2.VideoCapture(VIDEO_NAME)
+    if not videoCapture.isOpened():
+        raise IOError("Could not open the video '%s'" % VIDEO_NAME)
     fps = videoCapture.get(cv2.CAP_PROP_FPS)
     frame_numbers = videoCapture.get(cv2.CAP_PROP_FRAME_COUNT)
     sr_video_size = (
@@ -70,11 +76,10 @@ if __name__ == "__main__":
             )
         ),
     )
-    output_sr_name = (
-        "out_srf_" + str(UPSCALE_FACTOR) + "_" + VIDEO_NAME.split(".")[0] + ".avi"
-    )
+    video_stem = os.path.splitext(os.path.basename(VIDEO_NAME))[0]
+    output_sr_name = "out_srf_" + str(UPSCALE_FACTOR) + "_" + video_stem + ".avi"
     output_compared_name = (
-        "compare_srf_" + str(UPSCALE_FACTOR) + "_" + VIDEO_NAME.split(".")[0] + ".avi"
+        "compare_srf_" + str(UPSCALE_FACTOR) + "_" + video_stem + ".avi"
     )
     sr_video_writer = cv2.VideoWriter(
         output_sr_name, cv2.VideoWriter_fourcc("M", "P", "E", "G"), fps, sr_video_size
@@ -85,6 +90,11 @@ if __name__ == "__main__":
         fps,
         compared_video_size,
     )
+    if not (sr_video_writer.isOpened() and compared_video_writer.isOpened()):
+        raise IOError(
+            "Could not open the output videos '%s' and '%s'"
+            % (output_sr_name, output_compared_name)
+        )
     # read frame
     success, frame = videoCapture.read()
     test_bar = tqdm(
@@ -93,9 +103,7 @@ if __name__ == "__main__":
     for index in test_bar:
         if success:
             with torch.no_grad():
-                image = Variable(ToTensor()(frame)).unsqueeze(0)
-                if torch.cuda.is_available():
-                    image = image.cuda()
+                image = ToTensor()(frame).unsqueeze(0).to(device)
 
                 out = model(image)
                 out = out.cpu()
