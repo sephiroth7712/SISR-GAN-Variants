@@ -11,12 +11,26 @@ from tqdm import tqdm
 
 from data import TestDatasetFromFolder, display_transform
 from models import GENERATORS
-from models.common import psnr, ssim
+from models.common import psnr, psnr_y, ssim, ssim_y
 from utils import get_device, load_generator
 
 # Rows of the results CSV: these first, then any other dataset prefixes found.
 DATASET_ORDER = ["Set5", "Set14"]
-METRICS = ["pre_psnr", "pre_ssim", "psnr", "ssim", "runtime"]
+# Columns of the results CSV. pre_* = generator after pre-training, no prefix = after
+# GAN training, bicubic_* = bicubic upscaling. *_y = Y channel of 8-bit images with a
+# border of `upscale_factor` pixels removed (the protocol of most SR papers).
+METRICS = [
+    "pre_psnr", "pre_ssim", "psnr", "ssim",
+    "pre_psnr_y", "pre_ssim_y", "psnr_y", "ssim_y",
+    "bicubic_psnr", "bicubic_ssim", "bicubic_psnr_y", "bicubic_ssim_y",
+    "runtime",
+]
+
+
+def synchronize(device):
+    """Wait for queued CUDA work, so wall-clock timings cover the whole forward pass."""
+    if device.type == "cuda":
+        torch.cuda.synchronize(device)
 
 
 def main():
@@ -69,6 +83,13 @@ def main():
     out_path = "benchmark_results/" + MODEL_NAME + "/SRF_" + str(UPSCALE_FACTOR) + "/"
     os.makedirs(out_path, exist_ok=True)
 
+    # Warm up, so one-off CUDA initialisation and kernel selection are not timed.
+    if len(test_set) > 0:
+        with torch.no_grad():
+            warmup_input = test_set[0][1].unsqueeze(0).to(device)
+            for _ in range(3):
+                model_pre(warmup_input)
+
     # results[<dataset prefix>][<metric>] -> list of per-image values
     results = {}
     for image_name, lr_image, hr_restore_img, hr_image in test_bar:
@@ -76,16 +97,30 @@ def main():
             image_name = image_name[0]
             lr_image = lr_image.to(device)
             hr_image = hr_image.to(device)
+            hr_restore_img = hr_restore_img.to(device)
 
-            start_time = time.time()
+            # Both checkpoints share one architecture, so timing one of them is enough.
+            synchronize(device)
+            start_time = time.perf_counter()
             pre_sr_image = model_pre(lr_image)
-            runtime = time.time() - start_time
+            synchronize(device)
+            runtime = time.perf_counter() - start_time
             sr_image = model_gan(lr_image)
 
             pre_psnr_score = psnr(pre_sr_image, hr_image).cpu()
             pre_ssim_score = ssim(pre_sr_image, hr_image).cpu()
             psnr_score = psnr(sr_image, hr_image).cpu()
             ssim_score = ssim(sr_image, hr_image).cpu()
+            extra_scores = {
+                "pre_psnr_y": psnr_y(pre_sr_image, hr_image, UPSCALE_FACTOR),
+                "pre_ssim_y": ssim_y(pre_sr_image, hr_image, UPSCALE_FACTOR),
+                "psnr_y": psnr_y(sr_image, hr_image, UPSCALE_FACTOR),
+                "ssim_y": ssim_y(sr_image, hr_image, UPSCALE_FACTOR),
+                "bicubic_psnr": psnr(hr_restore_img, hr_image),
+                "bicubic_ssim": ssim(hr_restore_img, hr_image),
+                "bicubic_psnr_y": psnr_y(hr_restore_img, hr_image, UPSCALE_FACTOR),
+                "bicubic_ssim_y": ssim_y(hr_restore_img, hr_image, UPSCALE_FACTOR),
+            }
 
             test_images = torch.stack(
                 [
@@ -114,6 +149,8 @@ def main():
             scores["pre_ssim"].append(pre_ssim_score)
             scores["psnr"].append(psnr_score)
             scores["ssim"].append(ssim_score)
+            for metric, value in extra_scores.items():
+                scores[metric].append(value.cpu())
             scores["runtime"].append(runtime)
 
     datasets = [name for name in DATASET_ORDER if name in results]

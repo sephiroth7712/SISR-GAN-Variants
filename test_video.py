@@ -103,15 +103,17 @@ if __name__ == "__main__":
     for index in test_bar:
         if success:
             with torch.no_grad():
+                # OpenCV decodes frames as BGR; the models were trained on RGB images.
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
                 image = ToTensor()(frame).unsqueeze(0).to(device)
 
                 out = model(image)
                 out = out.cpu()
                 out_img = out.data[0].numpy()
-                out_img *= 255.0
-                out_img = (np.uint8(out_img)).transpose((1, 2, 0))
-                # save sr video
-                sr_video_writer.write(out_img)
+                out_img = np.clip(np.round(out_img * 255.0), 0, 255).astype(np.uint8)
+                out_img = np.ascontiguousarray(out_img.transpose((1, 2, 0)))
+                # save sr video (OpenCV writes BGR)
+                sr_video_writer.write(cv2.cvtColor(out_img, cv2.COLOR_RGB2BGR))
 
                 # make compared video and crop shot of left top\right top\center\left bottom\right bottom
                 out_img = ToPILImage()(out_img)
@@ -155,7 +157,7 @@ if __name__ == "__main__":
                     )(ToPILImage()(bottom_image))
                 )
                 final_image = np.concatenate((top_image, bottom_image))
-                # save compared video
-                compared_video_writer.write(final_image)
+                # save compared video (OpenCV writes BGR)
+                compared_video_writer.write(cv2.cvtColor(final_image, cv2.COLOR_RGB2BGR))
                 # next frame
                 success, frame = videoCapture.read()

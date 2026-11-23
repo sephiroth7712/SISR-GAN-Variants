@@ -72,11 +72,43 @@ def denormalize_m11(x):
 
 
 def psnr(x1, x2):
-    return peak_signal_noise_ratio(x1, x2)
+    """PSNR of RGB images with values in [0, 1]."""
+    return peak_signal_noise_ratio(x1, x2, data_range=1.0)
 
 
 def ssim(x1, x2):
-    return structural_similarity_index_measure(x1, x2)
+    """SSIM of RGB images with values in [0, 1]."""
+    return structural_similarity_index_measure(x1, x2, data_range=1.0)
+
+
+def quantize(img):
+    """Round images with values in [0, 1] to 8-bit levels, as when saving them as PNG."""
+    return torch.round(img.clamp(0.0, 1.0) * 255.0) / 255.0
+
+
+def rgb_to_y(img):
+    """Y (luma) channel of RGB images in [0, 1], ITU-R BT.601 as in MATLAB's rgb2ycbcr.
+
+    Returns values in [16/255, 235/255], shape (N, 1, H, W).
+    """
+    r, g, b = img[:, 0:1], img[:, 1:2], img[:, 2:3]
+    return (16.0 + 65.481 * r + 128.553 * g + 24.966 * b) / 255.0
+
+
+def shave(img, border):
+    """Remove ``border`` pixels from every side of the image."""
+    h, w = img.shape[-2:]
+    return img[..., border:h - border, border:w - border]
+
+
+def psnr_y(sr, hr, scale):
+    """PSNR as usually reported in SR papers: 8-bit images, Y channel, ``scale``-pixel border removed."""
+    return psnr(shave(rgb_to_y(quantize(sr)), scale), shave(rgb_to_y(quantize(hr)), scale))
+
+
+def ssim_y(sr, hr, scale):
+    """SSIM as usually reported in SR papers: 8-bit images, Y channel, ``scale``-pixel border removed."""
+    return ssim(shave(rgb_to_y(quantize(sr)), scale), shave(rgb_to_y(quantize(hr)), scale))
 
 
 # ---------------------------------------

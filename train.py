@@ -1,5 +1,8 @@
 import argparse
 import os
+import random
+
+import numpy as np
 import pandas as pd
 import torch.optim as optim
 import torch.utils.data
@@ -43,9 +46,22 @@ parser.add_argument(
     help="number of generator pre-training (warm-up) epochs before GAN training "
     "(--warmup_batches is the old name of this option)",
 )
+parser.add_argument(
+    "--seed",
+    default=None,
+    type=int,
+    help="random seed for a reproducible run (default: not seeded)",
+)
 
 if __name__ == "__main__":
     opt = parser.parse_args()
+
+    if opt.seed is not None:
+        random.seed(opt.seed)
+        np.random.seed(opt.seed)
+        torch.manual_seed(opt.seed)  # seeds the CPU and all CUDA devices
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
     CROP_SIZE = opt.crop_size
     UPSCALE_FACTOR = opt.upscale_factor
@@ -124,6 +140,7 @@ if __name__ == "__main__":
                 valing_results = {
                     "mse": 0,
                     "ssims": 0,
+                    "psnrs": 0,
                     "psnr": 0,
                     "ssim": 0,
                     "batch_sizes": 0,
@@ -143,7 +160,10 @@ if __name__ == "__main__":
                     valing_results["mse"] += batch_mse * batch_size
                     batch_ssim = ssim(sr, hr)
                     valing_results["ssims"] += batch_ssim * batch_size
-                    valing_results["psnr"] = psnr(sr, hr)
+                    valing_results["psnrs"] += psnr(sr, hr) * batch_size
+                    valing_results["psnr"] = (
+                        valing_results["psnrs"] / valing_results["batch_sizes"]
+                    )
                     valing_results["ssim"] = (
                         valing_results["ssims"] / valing_results["batch_sizes"]
                     )
@@ -321,6 +341,7 @@ if __name__ == "__main__":
                 valing_results = {
                     "mse": 0,
                     "ssims": 0,
+                    "psnrs": 0,
                     "psnr": 0,
                     "ssim": 0,
                     "batch_sizes": 0,
@@ -338,9 +359,12 @@ if __name__ == "__main__":
 
                     batch_mse = ((sr - hr) ** 2).data.mean()
                     valing_results["mse"] += batch_mse * batch_size
-                    batch_ssim = ssim(hr, sr)
+                    batch_ssim = ssim(sr, hr)
                     valing_results["ssims"] += batch_ssim * batch_size
-                    valing_results["psnr"] = psnr(sr, hr)
+                    valing_results["psnrs"] += psnr(sr, hr) * batch_size
+                    valing_results["psnr"] = (
+                        valing_results["psnrs"] / valing_results["batch_sizes"]
+                    )
                     valing_results["ssim"] = (
                         valing_results["ssims"] / valing_results["batch_sizes"]
                     )

@@ -28,10 +28,14 @@ def resolve_checkpoint(model_name, ckpt):
 
 
 def load_generator(model_name, upscale_factor, ckpt, device):
-    """Build the named generator, load the weights in ``ckpt`` and move it to ``device``."""
+    """Build the named generator, load the weights in ``ckpt`` and prepare it for inference.
+
+    The model is moved to ``device`` and put in evaluation mode, so BatchNorm layers
+    use their learned running statistics instead of per-image batch statistics.
+    """
     model = get_generator(model_name)(1, upscale_factor)
     state_dict = torch.load(
         resolve_checkpoint(model_name, ckpt), map_location=device, weights_only=True
     )
     model.load_state_dict(state_dict)
-    return model.to(device)
+    return model.to(device).eval()

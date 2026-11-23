@@ -52,6 +52,17 @@ The experiments are conducted using the following setup:
 ## Results
 A qualitative comparison of the results can be found [here](https://imgversus.com/a/w3S22qqV).
 
+### Evaluation protocol
+`test_benchmark.py` runs the generators in inference mode (`model.eval()`) and writes, for each dataset, the mean of every per-image score (the median for `runtime`) to `statistics/<model_name>_srf_<scale>_test_results.csv`:
+
+| Columns | Meaning |
+|---|---|
+| `pre_psnr`, `pre_ssim` | Generator after pre-training: PSNR and SSIM on RGB values in [0, 1], whole image. |
+| `psnr`, `ssim` | Generator after GAN training, same protocol. |
+| `pre_psnr_y`, `pre_ssim_y`, `psnr_y`, `ssim_y` | The same outputs scored the way most super-resolution papers report results: rounded to 8 bits, Y channel (ITU-R BT.601), `<scale>` pixels removed from each border. |
+| `bicubic_psnr`, `bicubic_ssim`, `bicubic_psnr_y`, `bicubic_ssim_y` | Bicubic upscaling of the same low-resolution input, as a baseline. |
+| `runtime` | Median seconds per forward pass of the pre-trained generator (both checkpoints share its architecture), after 3 warm-up passes. |
+
 ## Usage
 Run all commands from the repository root.
 

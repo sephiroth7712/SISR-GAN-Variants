@@ -64,7 +64,8 @@ def main():
         out = model(image)
         elapsed = datetime.datetime.now() - start
         print("Time: " + str(elapsed) + "s")
-        out_img = ToPILImage()(out[0].cpu())
+        # round to the nearest 8-bit level (ToPILImage on a float tensor truncates)
+        out_img = ToPILImage()(torch.round(out[0].clamp(0, 1) * 255).byte().cpu())
         out_img.save(
             "out_srf_" + str(UPSCALE_FACTOR) + "_" + os.path.basename(IMAGE_NAME)
         )
